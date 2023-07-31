@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Emulating the 6502 | ericwoude</title>
+  <meta description="A brief talk on the inner workings of the 6502 CPU and how to emulate the processor." />
+  <meta name="og:title" content="Emulating the 6502" />
+  <meta name="og:description" content="A brief talk on the inner workings of the 6502 CPU and how to emulate the processor." />
+  <meta name="keywords" content="computer science, software engineering, emulation, 6502, cpu, nes, atari 2600, commodore 64, instructions, addressing modes" />
+  <meta property="article:section" content="Software Engineering" />
+  <meta property="article:author" content="Eric van der Woude" />
+  <meta property="article:published_time" content="30-7-2023" />
+  <meta property="article:tag" content="computer science" />
+  <meta property="article:tag" content="software engineering" />
+  <meta property="article:tag" content="emulation" />
+  <meta property="article:tag" content="6502" />
+  <meta property="article:tag" content="cpu" />
+  <meta property="article:tag" content="nes" />
+  <meta property="article:tag" content="atari 2600" />
+  <meta property="article:tag" content="commodore 64" />
+  <meta property="article:tag" content="instructions" />
+  <meta property="article:tag" content="addressing modes" />
+  
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612+Mono" />
+  </head>
+<body>
+  <div class="wrapper">
+    <div class="navigation">
+      <div>
+        <a href="/" class="navigation-home">Eric van der Woude</a>
+      </div>
+      <div>
+        <a href="http://github.com/ericwoude" rel="nofollow" class="navigation-link">github</a>
+        <a href="https://www.linkedin.com/in/eric-van-der-woude/" rel="nofollow" class="navigation-link">linkedin</a>
+      </div>   
+    </div>
+
+<h1>Emulating the 6502</h1>
+<p>In 1975, Mos Technology introduced the 6502 processor, which revolutionized home computing. It quickly gained popularity as it was the cheapest processor on the market, initially sold at one-sixth of the price of competing processors at that time. The 6502 or its variants were featured in an impressive array of computers, including:</p>
+<ul>
+<li>Atari 2600</li>
+<li>Apple II</li>
+<li>Commodore 64</li>
+<li>Nintendo Entertainment System</li>
+<li>And more.</li>
+</ul>
+<p><center><img src="6502.jpg" alt="A photograph of the topside of the MOS 6502 processor" width="200"/></center>
+<center>A photograph of the topside of the MOS 6502 processor <a href="http://www.cpu-collection.de/?l0=i&amp;i=1944">(reference)</a></center></p>
+<h2>Architecture</h2>
+<p>The 6502 is an 8-bit computer with a simple design, consisting of the following components:</p>
+<ul>
+<li>An 8-bit accumulator (A) used for arithmetic and logical operations.</li>
+<li>Two 8-bit general-purpose registers (X, Y).</li>
+<li>A processor status register (P).</li>
+<li>A 16-bit program counter (PC).</li>
+<li>An 8-bit stack pointer (SP).</li>
+</ul>
+<p>Now let's delve into the processor's instruction set:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;"></th>
+<th style="text-align: center;"><strong>0</strong></th>
+<th style="text-align: center;"><strong>1</strong></th>
+<th style="text-align: center;"><strong>2</strong></th>
+<th style="text-align: center;"><strong>3</strong></th>
+<th style="text-align: center;"><strong>4</strong></th>
+<th style="text-align: center;"><strong>5</strong></th>
+<th style="text-align: center;"><strong>6</strong></th>
+<th style="text-align: center;"><strong>7</strong></th>
+<th style="text-align: center;"><strong>8</strong></th>
+<th style="text-align: center;"><strong>9</strong></th>
+<th style="text-align: center;"><strong>A</strong></th>
+<th style="text-align: center;"><strong>B</strong></th>
+<th style="text-align: center;"><strong>C</strong></th>
+<th style="text-align: center;"><strong>D</strong></th>
+<th style="text-align: center;"><strong>E</strong></th>
+<th style="text-align: center;"><strong>F</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">BRK impl</td>
+<td style="text-align: center;">ORA X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ORA zpg</td>
+<td style="text-align: center;">ASL zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">PHP impl</td>
+<td style="text-align: center;">ORA #</td>
+<td style="text-align: center;">ASL A</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ORA abs</td>
+<td style="text-align: center;">ASL abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>1</strong></td>
+<td style="text-align: center;">BPL rel</td>
+<td style="text-align: center;">ORA ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ORA zpg,X</td>
+<td style="text-align: center;">ASL zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CLC impl</td>
+<td style="text-align: center;">ORA abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ORA abs,X</td>
+<td style="text-align: center;">ASL abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>2</strong></td>
+<td style="text-align: center;">JSR abs</td>
+<td style="text-align: center;">AND X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">BIT zpg</td>
+<td style="text-align: center;">AND zpg</td>
+<td style="text-align: center;">ROL zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">PLP impl</td>
+<td style="text-align: center;">AND #</td>
+<td style="text-align: center;">ROL A</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">BIT abs</td>
+<td style="text-align: center;">AND abs</td>
+<td style="text-align: center;">ROL abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>3</strong></td>
+<td style="text-align: center;">BMI rel</td>
+<td style="text-align: center;">AND ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">AND zpg,X</td>
+<td style="text-align: center;">ROL zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">SEC impl</td>
+<td style="text-align: center;">AND abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">AND abs,X</td>
+<td style="text-align: center;">ROL abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>4</strong></td>
+<td style="text-align: center;">RTI impl</td>
+<td style="text-align: center;">EOR X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">EOR zpg</td>
+<td style="text-align: center;">LSR zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">PHA impl</td>
+<td style="text-align: center;">EOR #</td>
+<td style="text-align: center;">LSR A</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">JMP abs</td>
+<td style="text-align: center;">EOR abs</td>
+<td style="text-align: center;">LSR abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>5</strong></td>
+<td style="text-align: center;">BVC rel</td>
+<td style="text-align: center;">EOR ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">EOR zpg,X</td>
+<td style="text-align: center;">LSR zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CLI impl</td>
+<td style="text-align: center;">EOR abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">EOR abs,X</td>
+<td style="text-align: center;">LSR abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>6</strong></td>
+<td style="text-align: center;">RTS impl</td>
+<td style="text-align: center;">ADC X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ADC zpg</td>
+<td style="text-align: center;">ROR zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">PLA impl</td>
+<td style="text-align: center;">ADC #</td>
+<td style="text-align: center;">ROR A</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">JMP ind</td>
+<td style="text-align: center;">ADC abs</td>
+<td style="text-align: center;">ROR abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>7</strong></td>
+<td style="text-align: center;">BVS rel</td>
+<td style="text-align: center;">ADC ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ADC zpg,X</td>
+<td style="text-align: center;">ROR zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">SEI impl</td>
+<td style="text-align: center;">ADC abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">ADC abs,X</td>
+<td style="text-align: center;">ROR abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>8</strong></td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">STA X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">STY zpg</td>
+<td style="text-align: center;">STA zpg</td>
+<td style="text-align: center;">STX zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">DEY impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">TXA impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">STY abs</td>
+<td style="text-align: center;">STA abs</td>
+<td style="text-align: center;">STX abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>9</strong></td>
+<td style="text-align: center;">BCC rel</td>
+<td style="text-align: center;">STA ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">STY zpg,X</td>
+<td style="text-align: center;">STA zpg,X</td>
+<td style="text-align: center;">STX zpg,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">TYA impl</td>
+<td style="text-align: center;">STA abs,Y</td>
+<td style="text-align: center;">TXS impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">STA abs,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>A</strong></td>
+<td style="text-align: center;">LDY #</td>
+<td style="text-align: center;">LDA X,ind</td>
+<td style="text-align: center;">LDX #</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">LDY zpg</td>
+<td style="text-align: center;">LDA zpg</td>
+<td style="text-align: center;">LDX zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">TAY impl</td>
+<td style="text-align: center;">LDA #</td>
+<td style="text-align: center;">TAX impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">LDY abs</td>
+<td style="text-align: center;">LDA abs</td>
+<td style="text-align: center;">LDX abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>B</strong></td>
+<td style="text-align: center;">BCS rel</td>
+<td style="text-align: center;">LDA ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">LDY zpg,X</td>
+<td style="text-align: center;">LDA zpg,X</td>
+<td style="text-align: center;">LDX zpg,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CLV impl</td>
+<td style="text-align: center;">LDA abs,Y</td>
+<td style="text-align: center;">TSX impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">LDY abs,X</td>
+<td style="text-align: center;">LDA abs,X</td>
+<td style="text-align: center;">LDX abs,Y</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>C</strong></td>
+<td style="text-align: center;">CPY #</td>
+<td style="text-align: center;">CMP X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CPY zpg</td>
+<td style="text-align: center;">CMP zpg</td>
+<td style="text-align: center;">DEC zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">INY impl</td>
+<td style="text-align: center;">CMP #</td>
+<td style="text-align: center;">DEX impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CPY abs</td>
+<td style="text-align: center;">CMP abs</td>
+<td style="text-align: center;">DEC abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>D</strong></td>
+<td style="text-align: center;">BNE rel</td>
+<td style="text-align: center;">CMP ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CMP zpg,X</td>
+<td style="text-align: center;">DEC zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CLD impl</td>
+<td style="text-align: center;">CMP abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CMP abs,X</td>
+<td style="text-align: center;">DEC abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>E</strong></td>
+<td style="text-align: center;">CPX #</td>
+<td style="text-align: center;">SBC X,ind</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CPX zpg</td>
+<td style="text-align: center;">SBC zpg</td>
+<td style="text-align: center;">INC zpg</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">INX impl</td>
+<td style="text-align: center;">SBC #</td>
+<td style="text-align: center;">NOP impl</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">CPX abs</td>
+<td style="text-align: center;">SBC abs</td>
+<td style="text-align: center;">INC abs</td>
+<td style="text-align: center;">---</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>F</strong></td>
+<td style="text-align: center;">BEQ rel</td>
+<td style="text-align: center;">SBC ind,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">SBC zpg,X</td>
+<td style="text-align: center;">INC zpg,X</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">SED impl</td>
+<td style="text-align: center;">SBC abs,Y</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">---</td>
+<td style="text-align: center;">SBC abs,X</td>
+<td style="text-align: center;">INC abs,X</td>
+<td style="text-align: center;">---</td>
+</tr>
+</tbody>
+</table>
+<p>When reading the table, the instructions can be referenced using a row-column format, where <code>0x05</code> refers to ORA zpg, and <code>0x50</code> refers to BVC rel. It's important to note that when addressing hexadecimal values, they are prepended with `0x", and when addressing binary values, they are prepended with "0b".</p>
+<p>The instruction set consists of 56 distinct operations. Some operation names may occur more than once, such as LDA abs and LDA zpg, which perform the same operations but differ in how the processor fetches their inputs (operands). These different ways of fetching operands are known as <a href="https://www.nesdev.org/obelisk-6502-guide/addressing.html">addressing modes</a>. Considering the 56 distinct operations and the numerous addressing modes, the total number of instructions sums up to 151.</p>
+<p>Now that we have a basic understanding of the 6502, let's move on to how it moves.</p>
+<h2>Interpreting the bytecode</h2>
+<p>Let's dive into bytecode interpretation using a simple example: the binary 6502 program <code>A9 0A 8D 00 00 A9 0C 2D 00 00</code>.</p>
+<ol>
+<li>The first byte is <code>0xA9</code>, which corresponds to the instruction "LDA #" in the instruction set table above. The "#" symbol indicates that the addressing mode is immediate. This means that the instruction uses the next 8-bit value as the operand, resulting in "LDA #10".</li>
+<li>Now we move to the third byte in the sequence, <code>0x8D</code>, representing the "STA abs" (store A with absolute addressing) instruction. Absolute addressing requires the next two bytes in the sequence, <code>0x00</code> and <code>0x00</code>, to form a 16-bit memory address where the contents of A will be stored. So the instruction becomes "STA $0000".</li>
+<li>The following instruction is <code>0xA9</code>. As we already know this stands for "LDA #", and the subsequent byte, <code>0x0C</code>, is loaded into A. Therefore, "LDA #12".</li>
+<li>Moving forward, we encounter the byte <code>0x2D</code>, which corresponds to the "AND abs" instruction. The AND instruction calculates the bitwise AND between A and the operand, and stores the result back in A. Here, the operand is fetched from the absolute address <code>0x0000</code>, formed by the last two bytes in the sequence. So, the instruction becomes "AND $0000".</li>
+</ol>
+<p>We have successfully demystified the byte sequence into the following four instructions, along with their equivalent pseudocode:</p>
+<div class="codehilite"><pre><span></span><code><span class="nf">LDA</span><span class="w"> </span><span class="c1">#10      ; A = 0x0A</span>
+<span class="nf">STA</span><span class="w"> </span><span class="kc">$</span><span class="mi">0000</span><span class="w">    </span><span class="c1">; memory[0x0000] = A</span>
+<span class="nf">LDA</span><span class="w"> </span><span class="c1">#12      ; A = 0x0C</span>
+<span class="nf">AND</span><span class="w"> </span><span class="kc">$</span><span class="mi">0000</span><span class="w">    </span><span class="c1">; A = memory[0x0000] = A</span>
+</code></pre></div>
+
+<p>By breaking down the bytecode step-by-step and providing pseudocode explanations, we gain a better understanding of how the 6502 processor processes instructions and manipulates data in memory.</p>
+<p>Before delving into control flow, let's discuss the 8-bit status register of the 6502. The status register comprises six 1-bit flags that represent specific processor statusses. These flags are crucial in determining the outcome of certain instructions.</p>
+<p>For example, the "CMP" instruction compares a value from memory with the accumulator and sets the negative (N), the zero (Z), and the carry (C) flags based on the result. These flags come into play in control flow instructions such as "BNE", which branches to a specific location if the zero (Z) flag is false.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// Status register with bits 7 to 0</span>
+<span class="c1">// Least significant bit (7) represents the negative flag</span>
+<span class="c1">// Most significant bit (0) represents the carry flag</span>
+
+<span class="mi">7</span><span class="w">       </span><span class="mi">0</span>
+<span class="o">----</span><span class="w"> </span><span class="o">----</span>
+<span class="n">NV__</span><span class="w"> </span><span class="n">DIZC</span>
+<span class="o">||||</span><span class="w"> </span><span class="o">||||</span>
+<span class="o">||||</span><span class="w"> </span><span class="o">|||</span>┕<span class="o">-</span><span class="w"> </span><span class="n">Carry</span>
+<span class="o">||||</span><span class="w"> </span><span class="o">||</span>┕<span class="o">--</span><span class="w"> </span><span class="n">Zero</span>
+<span class="o">||||</span><span class="w"> </span><span class="o">|</span>┕<span class="o">---</span><span class="w"> </span><span class="n">Interrupt</span><span class="w"> </span><span class="n">Disable</span>
+<span class="o">||||</span><span class="w"> </span>┕<span class="o">----</span><span class="w"> </span><span class="n">Decimal</span>
+<span class="o">|||</span>┕<span class="o">------</span><span class="w"> </span><span class="n">Break</span>
+<span class="o">||</span>┕<span class="o">-------</span><span class="w"> </span><span class="n">Unused</span>
+<span class="o">|</span>┕<span class="o">--------</span><span class="w"> </span><span class="n">Overflow</span>
+┕<span class="o">---------</span><span class="w"> </span><span class="n">Negative</span>
+</code></pre></div>
+
+<p>With this understanding, let's now proceed to implement the 6502 emulator.</p>
+<h2>Implementing the 6502 emulator</h2>
+<p>To structure our emulation project, we'll begin with the CPU, which has a straightforward design. The CPU is attached to a bus, writing to, and retrieving from memory is done through the bus. For simplicity, imagine the bus as an array of 64 kB unsigned 8-bit integers. In reality, this structure is more complex and varies on the specific machine hosting the 6502 processor.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">pub</span><span class="w"> </span><span class="k">struct</span> <span class="nc">Cpu</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">a</span>: <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">x</span>: <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">y</span>: <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">sp</span>: <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">status</span>: <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">pc</span>: <span class="kt">u16</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>To interpret the bytecode, we need to determine which instruction corresponds to each opcode (the byte representation of a distinct instruction). There are two common ways of achieving this: (a) using a giant switch statement for each opcode or (b) using a dispatch (jump table) that relates the opcode to a function pointer. In this implementation, we'll go with the latter approach, creating a structure for instructions that keeps track of the appropriate operation function and addressing function. We then maintain a dispatch table in memory.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="nc">Instruction</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">addressmode</span>: <span class="nc">fn</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cpu</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u8</span><span class="p">,</span>
+<span class="w">    </span><span class="n">operation</span>: <span class="nc">fn</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Cpu</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">,</span><span class="w"> </span><span class="n">operand</span>: <span class="kt">u8</span><span class="p">),</span>
+<span class="p">}</span>
+
+<span class="k">const</span><span class="w"> </span><span class="n">DISPATCH</span>: <span class="p">[</span><span class="n">Instruction</span><span class="p">;</span><span class="w"> </span><span class="mi">256</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="n">Instruction</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">operation</span>: <span class="nc">Cpu</span>::<span class="n">brk</span><span class="p">,</span><span class="w"> </span><span class="n">addressmode</span>: <span class="nc">Cpu</span>::<span class="n">imm</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="n">Instruction</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">operation</span>: <span class="nc">Cpu</span>::<span class="n">ora</span><span class="p">,</span><span class="w"> </span><span class="n">addressmode</span>: <span class="nc">Cpu</span>::<span class="n">izx</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="c1">// More instructions</span>
+<span class="p">]</span>
+</code></pre></div>
+
+<p>To read the bytecode byte-by-byte, we create a function named "step". This function reads the byte located at the program counter (keeps track of where we are in the byte sequence). Then it increases the program counter by one, locates the corresponding instruction in the dispatch table, and calls the instruction's addressing mode function and operation function.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">impl</span><span class="w"> </span><span class="n">Cpu</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">pub</span><span class="w"> </span><span class="k">fn</span> <span class="nf">step</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">opcode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bus</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">);</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">.</span><span class="n">wrapping_add</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">instruction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">DISPATCH</span><span class="p">[</span><span class="n">opcode</span><span class="p">];</span>
+
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">operand</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">instruction</span><span class="p">.</span><span class="n">addressmode</span><span class="p">)(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bus</span><span class="p">);</span>
+<span class="w">        </span><span class="p">(</span><span class="n">instruction</span><span class="p">.</span><span class="n">operation</span><span class="p">)(</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bus</span><span class="p">,</span><span class="w"> </span><span class="n">operand</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Let's imlement two addressing modes as examples: immediate and absolute addressing. For immediate addressing, the processor fetches the operand immediately from the byte sequence, incrementing the program counter by one.</p>
+<p>For absolute addressing, the processor fetches the full 16-bit address from the memory region pointed to by the program counter. Since the 6502 has a <a href="https://en.wikipedia.org/wiki/Endianness">litte-endian architecture</a>, the first byte fetched will be the least significant byte in the two-byte address.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">impl</span><span class="w"> </span><span class="n">Cpu</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Other functions</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">imm</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">_</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u8</span> <span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">operand</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">;</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">.</span><span class="n">wrapping_add</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+<span class="w">        </span><span class="n">operand</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">abs</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bus</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">u8</span> <span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bus</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u16</span><span class="p">;</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">.</span><span class="n">wrapping_add</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bus</span><span class="p">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u16</span><span class="p">;</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">pc</span><span class="p">.</span><span class="n">wrapping_add</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+<span class="w">        </span><span class="p">(</span><span class="n">hi</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">lo</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Before we implement the "LDA" and "AND" instructions, we create functionality to alter the status register. First, we need a structure for flags, which is designed in such a way that referencing an individual flag returns the bit-position of the flag in the status register. Second, we need two functions to set and read flags using bitwise logic.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">enum</span> <span class="nc">Flag</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">C</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="c1">// carry bit</span>
+<span class="w">    </span><span class="n">Z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="c1">// zero</span>
+<span class="w">    </span><span class="n">I</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="c1">// disable interrupts</span>
+<span class="w">    </span><span class="n">D</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="c1">// decimal mode</span>
+<span class="w">    </span><span class="n">B</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="c1">// break</span>
+<span class="w">    </span><span class="n">U</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">5</span><span class="p">),</span><span class="w"> </span><span class="c1">// unused</span>
+<span class="w">    </span><span class="n">V</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">6</span><span class="p">),</span><span class="w"> </span><span class="c1">// overflow</span>
+<span class="w">    </span><span class="n">N</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">7</span><span class="p">),</span><span class="w"> </span><span class="c1">// negative`</span>
+<span class="p">}</span>
+
+<span class="k">impl</span><span class="w"> </span><span class="n">Cpu</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Other functions</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">set_flag</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">flag</span>: <span class="nc">Flag</span><span class="p">,</span><span class="w"> </span><span class="n">value</span>: <span class="kt">bool</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">match</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kc">true</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">status</span><span class="w"> </span><span class="o">|=</span><span class="w"> </span><span class="n">flag</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u8</span><span class="p">,</span>
+<span class="w">            </span><span class="kc">false</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">status</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="o">!</span><span class="p">(</span><span class="n">flag</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u8</span><span class="p">),</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">get_flag</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">flag</span>: <span class="nc">Flag</span><span class="p">)</span><span class="w"> </span>-&gt; <span class="kt">bool</span> <span class="p">{</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">status</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">flag</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="kt">u8</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Now, let's implement the "LDA" and "AND" instruction to complete our exercise. The "LDA" instruction loads the fetched operand into the A register, and sets the negative and zero flags accordingly (refer to <a href="https://www.masswerk.at/6502/6502_instruction_set.html#LDA">documentation</a>). Unsigned integers use the 8th bit to signify postivity or negativity, therefore we calculate the negative flag using a bitwise AND operator. Next, the "AND" instruction computes the bitwise AND of the accumulator (A) and a position in memory, and stores the result back into the accumulator. The "AND" instruction also sets the negative and zero flags based on the result.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">impl</span><span class="w"> </span><span class="n">Cpu</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Other functions</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">lda</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bus</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">Bus</span><span class="p">,</span><span class="w"> </span><span class="n">operand</span>: <span class="kt">u8</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">operand</span><span class="p">;</span>
+
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">set_flag</span><span class="p">(</span><span class="n">Flag</span>::<span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mb">0b10000000</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">set_flag</span><span class="p">(</span><span class="n">Flag</span>::<span class="n">Z</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">fn</span> <span class="nf">and</span><span class="p">(</span><span class="o">&amp;</span><span class="k">mut</span><span class="w"> </span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">bus</span>: <span class="kp">&amp;</span><span class="nc">mut</span><span class="w"> </span><span class="n">bus</span><span class="p">,</span><span class="w"> </span><span class="n">operand</span>: <span class="kt">u8</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">&amp;=</span><span class="w"> </span><span class="n">operand</span><span class="p">;</span>
+
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">set_flag</span><span class="p">(</span><span class="n">Flag</span>::<span class="n">N</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mb">0b10000000</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">        </span><span class="bp">self</span><span class="p">.</span><span class="n">set_flag</span><span class="p">(</span><span class="n">Flag</span>::<span class="n">Z</span><span class="p">,</span><span class="w"> </span><span class="bp">self</span><span class="p">.</span><span class="n">a</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2>Ending notes</h2>
+<p>In conclusion, we have gained a basic understanding of the processor structure and its instruction set. We've deciphered a 6502 bytecode program and implemented two addressing modes and two functions. However, there are still 11 more addressing modes to explore, 49 additional operations to implement, interrupt modes to be handled, and many more tasks to complete. I hope you enjoyed this primer on the 6502, and I encourage you to continue your exploration and development of your own 6502 emulator.</p>
+<h3>Extra documentation and future reading</h3>
+<ul>
+<li><a href="https://www.nesdev.org/obelisk-6502-guide/">Obelisk 6502 guide</a></li>
+<li><a href="https://www.masswerk.at/6502/6502_instruction_set.html">Masswerk 6502 Instruction Set</a></li>
+<li><a href="https://www.nesdev.org/wiki/CPU">Nesdev Wiki</a></li>
+<li><a href="https://github.com/ericwoude/nes/blob/main/src/cpu.rs">My fully-tested 6502 emulator</a></li>
+</ul>
+
+<footer><small>&copy; Copyright 2023, Eric van der Woude</small></footer> 
+</div>
+</body>
+</html>
